@@ -883,7 +883,6 @@
         document.addEventListener('DOMContentLoaded', function() {
             const { jsPDF } = window.jspdf;
             
-            // ИЗМЕНЕНИЕ 1 (Для корректного импорта): const заменен на let
             let workStart = new Date(); 
             workStart.setHours(9, 45, 0, 0);
             
@@ -1563,13 +1562,11 @@
                         
                         // Import settings if available
                         if (data.settings) {
-                            // ИЗМЕНЕНИЕ 1: Переменные workStart и workEnd объявлены как let и могут быть изменены
                             if (data.settings.workStart) workStart = new Date(data.settings.workStart);
                             if (data.settings.workEnd) workEnd = new Date(data.settings.workEnd);
                         }
                         
                         renderEmployees();
-                        // ИЗМЕНЕНИЕ 1: Перерисовка заголовков таймлайна при смене времени
                         generateTimelineHeaders(); 
                         saveToLocalStorage();
                         
@@ -1585,8 +1582,7 @@
                 e.target.value = '';
             });
             
-            // Copy schedule function
-            // Copy schedule function
+            // Copy schedule function - ИСПРАВЛЕНА ЛОГИКА СОРТИРОВКИ И ОБРАБОТКИ ПЕРЕСЕЧЕНИЙ
             function copySchedule(format) {
                 let text = '';
                 
@@ -1624,22 +1620,61 @@
                         });
                     });
                     
-                    // !!! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Сортировка по времени начала.
-                    // Без этого дальнейший расчет времени "Свободно" будет неверным.
-                    allBreaks.sort((a, b) => a.start - b.start); 
+                    // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ 1: Сортировка всех индивидуальных перерывов для корректного вывода
+                    allBreaks.sort((a, b) => a.start.getTime() - b.start.getTime()); 
                     
-                    // Calculate total busy time
+                    // Calculate total busy time (Сумма всех ИНДИВИДУАЛЬНЫХ перерывов)
                     const totalBusyTime = allBreaks.reduce((total, br) => total + br.duration, 0);
                     const totalWorkTime = (workEnd - workStart) / (1000 * 60);
-                    const totalFreeTime = totalWorkTime - totalBusyTime;
+
+                    // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ 2: МЕРЖИНГ (СЛИЯНИЕ) ПЕРЕСЕКАЮЩИХСЯ ИНТЕРВАЛОВ ---
                     
-                    // Generate free time slots
+                    const mergedBusyIntervals = [];
+                    let mergedTotalOccupiedTime = 0;
+                    
+                    // Для корректного слияния нужен массив только с датами
+                    const intervalsForMerging = allBreaks.map(b => ({
+                        start: b.start, 
+                        end: b.end
+                    }));
+
+                    if (intervalsForMerging.length > 0) {
+                        // Сортируем (если этого не сделали выше, но тут гарантируем)
+                        intervalsForMerging.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+                        let currentMerged = intervalsForMerging[0];
+
+                        // Проход по отсортированному списку для слияния
+                        for (let i = 1; i < intervalsForMerging.length; i++) {
+                            const next = intervalsForMerging[i];
+
+                            // Проверяем на пересечение или примыкание
+                            if (currentMerged.end.getTime() >= next.start.getTime()) {
+                                // Расширяем текущий интервал до самого позднего конца
+                                currentMerged.end = new Date(Math.max(currentMerged.end.getTime(), next.end.getTime()));
+                            } else {
+                                // Нет пересечения, сохраняем текущий и начинаем новый
+                                mergedBusyIntervals.push(currentMerged);
+                                currentMerged = next;
+                            }
+                        }
+                        mergedBusyIntervals.push(currentMerged); // Добавляем последний интервал
+                        
+                        // Calculate total occupied time on the timeline 
+                        mergedTotalOccupiedTime = mergedBusyIntervals.reduce((total, interval) => 
+                            total + (interval.end.getTime() - interval.start.getTime()) / (1000 * 60)
+                        , 0);
+                    }
+                    
+                    // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ 3: Расчет общего свободного времени от ОБЩЕЙ длины смены минус ОБЩЕЕ занятое время на таймлайне
+                    const totalFreeTime = totalWorkTime - mergedTotalOccupiedTime; 
+                    
+                    // --- ГЕНЕРАЦИЯ СВОБОДНЫХ СЛОТОВ НА ОСНОВЕ МЕРЖЕННЫХ ИНТЕРВАЛОВ ---
                     const freeSlots = [];
                     let currentTime = new Date(workStart);
                     
-                    // Проходим по ОТСОРТИРОВАННОМУ массиву
-                    allBreaks.forEach(br => { 
-                        if (currentTime < br.start) {
+                    mergedBusyIntervals.forEach(br => { 
+                        if (currentTime.getTime() < br.start.getTime()) {
                             const freeDuration = (br.start - currentTime) / (1000 * 60);
                             freeSlots.push({
                                 start: new Date(currentTime),
@@ -1647,12 +1682,12 @@
                                 duration: freeDuration
                             });
                         }
-                        // Сдвигаем текущее время к концу самого позднего занятого интервала
-                        currentTime = new Date(Math.max(currentTime.getTime(), br.end.getTime()));
+                        // Сдвигаем текущее время за самый поздний конец занятого интервала
+                        currentTime = new Date(Math.max(currentTime.getTime(), br.end.getTime())); 
                     });
                     
-                    // Add remaining free time (если после последнего перерыва осталось время до конца смены)
-                    if (currentTime < workEnd) {
+                    // Add remaining free time
+                    if (currentTime.getTime() < workEnd.getTime()) {
                         const freeDuration = (workEnd - currentTime) / (1000 * 60);
                         freeSlots.push({
                             start: new Date(currentTime),
@@ -1661,9 +1696,11 @@
                         });
                     }
                     
+                    // --- ФОРМИРОВАНИЕ ИТОГОВОГО ТЕКСТА ---
+                    
                     text = `⏰ График смены (${workStart.toTimeString().substring(0, 5)} - ${workEnd.toTimeString().substring(0, 5)})\n\n`;
                     
-                    // Занятое время (ТЕПЕРЬ ГАРАНТИРОВАННО ОТСОРТИРОВАНО)
+                    // Занятое время (отсортировано, показывает индивидуальные перерывы)
                     text += `✅ Занято (всего ${totalBusyTime} мин):\n`;
                     if (allBreaks.length > 0) {
                         allBreaks.forEach(br => { 
@@ -1675,7 +1712,7 @@
                         text += `    Нет назначенных перерывов.\n`;
                     }
                     
-                    // Свободное время
+                    // Свободное время (показывает правильное общее время на таймлайне)
                     text += `\n🛋️ Свободно (всего ${totalFreeTime} мин):\n`;
                     if (freeSlots.length > 0) {
                          freeSlots.forEach(slot => {
