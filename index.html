@@ -1586,6 +1586,7 @@
             });
             
             // Copy schedule function
+            // Copy schedule function
             function copySchedule(format) {
                 let text = '';
                 
@@ -1623,7 +1624,8 @@
                         });
                     });
                     
-                    // ИЗМЕНЕНИЕ 2: Сортируем все перерывы по времени начала. 
+                    // !!! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Сортировка по времени начала.
+                    // Без этого дальнейший расчет времени "Свободно" будет неверным.
                     allBreaks.sort((a, b) => a.start - b.start); 
                     
                     // Calculate total busy time
@@ -1649,7 +1651,7 @@
                         currentTime = new Date(Math.max(currentTime.getTime(), br.end.getTime()));
                     });
                     
-                    // Add remaining free time
+                    // Add remaining free time (если после последнего перерыва осталось время до конца смены)
                     if (currentTime < workEnd) {
                         const freeDuration = (workEnd - currentTime) / (1000 * 60);
                         freeSlots.push({
@@ -1661,7 +1663,7 @@
                     
                     text = `⏰ График смены (${workStart.toTimeString().substring(0, 5)} - ${workEnd.toTimeString().substring(0, 5)})\n\n`;
                     
-                    // Занятое время (теперь гарантированно отсортировано)
+                    // Занятое время (ТЕПЕРЬ ГАРАНТИРОВАННО ОТСОРТИРОВАНО)
                     text += `✅ Занято (всего ${totalBusyTime} мин):\n`;
                     if (allBreaks.length > 0) {
                         allBreaks.forEach(br => { 
