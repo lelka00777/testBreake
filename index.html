@@ -90,28 +90,20 @@
             -webkit-overflow-scrolling: touch;
         }
         
-        /* --- ИСПРАВЛЕННЫЕ СТИЛИ ДЛЯ ИДЕАЛЬНОГО ВЫРАВНИВАНИЯ (МОБИЛЬНЫЙ ПОРТРЕТ) --- */
-        .timeline-header, .timeline-footer {
-            display: flex; /* Обеспечиваем Flexbox */
+        .timeline-header {
+            display: flex;
             height: 30px;
-            margin-left: 0; /* Удаляем старый фиксированный отступ */
+            /* margin-left: 120px; <--- УДАЛЕНО */
             min-width: max-content;
-            background: #f8f9fa; /* Фон, чтобы сливаться с заголовками */
         }
         
-        /* Псевдоэлемент, который точно копирует ширину employee-info */
-        .timeline-header::before, .timeline-footer::before {
-            content: "";
-            flex: 0 0 120px; /* Ширина employee-info */
-            border-right: 2px solid #bdc3c7; /* Граница employee-info */
-            box-sizing: border-box;
-            min-width: 120px; /* Минимальная ширина, чтобы не сжимался */
-            background: #ecf0f1; /* Фон, чтобы сливаться с employee-info */
-            z-index: 3; /* Чтобы был выше таймлайна */
-            position: sticky;
-            left: 0;
+        .timeline-footer {
+            display: flex;
+            height: 30px;
+            /* margin-left: 120px; <--- УДАЛЕНО */
+            min-width: max-content;
+            margin-top: 5px;
         }
-        /* -------------------------------------------------------------------------- */
         
         .time-slot {
             flex: 0 0 35px;
@@ -1200,17 +1192,17 @@
                 timelineHeader.innerHTML = '';
                 timelineFooter.innerHTML = '';
                 
-                // Добавляем пустой time-slot в начало, чтобы он занял место псевдоэлемента ::before,
-                // который мы используем для выравнивания.
-                const emptySlotHeader = document.createElement('div');
-                emptySlotHeader.className = 'time-slot';
-                emptySlotHeader.style.visibility = 'hidden';
-                timelineHeader.appendChild(emptySlotHeader);
+                // === ИСПРАВЛЕНИЕ: Добавляем пустой элемент-заполнитель для выравнивания (120px) ===
+                const placeholderStyle = 'flex: 0 0 120px; min-width: 120px;';
                 
-                const emptySlotFooter = document.createElement('div');
-                emptySlotFooter.className = 'time-slot';
-                emptySlotFooter.style.visibility = 'hidden';
-                timelineFooter.appendChild(emptySlotFooter);
+                const placeholderHeader = document.createElement('div');
+                placeholderHeader.style.cssText = placeholderStyle;
+                timelineHeader.appendChild(placeholderHeader);
+                
+                const placeholderFooter = document.createElement('div');
+                placeholderFooter.style.cssText = placeholderStyle;
+                timelineFooter.appendChild(placeholderFooter);
+                // ==================================================================================
                 
                 let currentTime = new Date(workStart);
                 
