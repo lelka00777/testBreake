@@ -1,0 +1,2178 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Контроль перерывов сотрудников</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+            padding: 10px;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+            padding: 12px;
+            overflow-x: auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #eee;
+            font-size: 1.4rem;
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .input-group {
+            width: 100%;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.85rem;
+        }
+        
+        input, select, button {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-weight: 600;
+            padding: 10px;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        .timeline-container {
+            overflow-x: auto;
+            margin-bottom: 15px;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* ВОССТАНОВЛЕНИЕ МАСШТАБА: Вернули ширину колонки */
+        .timeline-header {
+            display: flex;
+            height: 30px;
+            margin-left: 150px; 
+            min-width: max-content;
+        }
+        
+        /* ВОССТАНОВЛЕНИЕ МАСШТАБА: Вернули ширину колонки */
+        .timeline-footer {
+            display: flex;
+            height: 30px;
+            margin-left: 150px;
+            min-width: max-content;
+            margin-top: 5px;
+        }
+        
+        /* ВОССТАНОВЛЕНИЕ МАСШТАБА: Вернули ширину ячейки (30px) */
+        .time-slot {
+            flex: 0 0 30px;
+            text-align: center;
+            padding: 6px 0;
+            /* Измененный размер для лучшего размещения HH:MM */
+            font-size: 0.65rem; 
+            border-left: 1px solid #ddd;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 30px;
+        }
+        
+        .employee-row {
+            display: flex;
+            min-height: 50px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            min-width: max-content;
+        }
+        
+        /* ВОССТАНОВЛЕНИЕ МАСШТАБА: Вернули ширину колонки (150px) */
+        .employee-info {
+            flex: 0 0 150px;
+            padding: 6px;
+            background: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-right: 2px solid #bdc3c7;
+            min-width: 150px;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+        }
+
+        /* Стиль для инпут-поля, когда включено редактирование */
+        .employee-info input[type="text"] {
+            padding: 3px;
+            border: 1px solid #3498db;
+            border-radius: 3px;
+            font-size: inherit;
+        }
+        
+        .employee-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 2px;
+            cursor: pointer; /* Для click */
+        }
+        
+        .employee-position {
+            font-size: 0.75rem;
+            color: #7f8c8d;
+            cursor: pointer; /* Для click */
+        }
+
+        /* Стиль для отображения рабочего времени сотрудника */
+        .employee-work-hours {
+            font-size: 0.75rem;
+            color: #3498db; 
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .employee-total-breaks {
+            font-size: 0.75rem;
+            color: #e74c3c; 
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        
+        .time-cells {
+            display: flex;
+            flex: 1;
+            min-width: max-content;
+        }
+        
+        /* ВОССТАНОВЛЕНИЕ МАСШТАБА: Вернули ширину ячейки (30px) */
+        .time-cell {
+            flex: 0 0 30px;
+            border: 1px solid #ddd;
+            border-left: none;
+            /* **БЛЕДНО-СИНИЙ**: Используется для НЕРАБОЧЕГО времени сотрудника */
+            background: #f0f8ff; 
+            transition: background 0.2s;
+            min-width: 30px;
+        }
+
+        /* **НАСЫЩЕННЫЙ СИНИЙ**: Рабочее время сотрудника */
+        .time-cell.working-time-cell {
+            background: #3498db; 
+            background: linear-gradient(to right, #3498db, #4aa8de);
+        }
+        
+        .time-cell.break {
+            background: #e74c3c; /* Base Break Color - Красный */
+        }
+
+        /* Стиль для конфликтных зон */
+        .time-cell.conflict {
+            background: #c0392b; /* Darker red for 2+ simultaneous breaks */
+            border: 1px dashed #fff !important; 
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 12px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85rem;
+        }
+        
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        
+        .working-time {
+            /* Насыщенный синий */
+            background: #3498db; 
+            border: 1px solid #ddd;
+        }
+
+        .non-working-time {
+            /* Бледно-синий */
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+        }
+        
+        .break-time {
+            background: #e74c3c;
+        }
+        
+        .conflict-time {
+            background: #c0392b;
+            border: 1px dashed #fff;
+        }
+        
+        .employee-controls {
+            display: flex;
+            gap: 6px;
+            flex-direction: column;
+        }
+        
+        .employee-controls button {
+            padding: 5px;
+            font-size: 0.7rem;
+        }
+        
+        .show-breaks-btn {
+            background: #9b59b6;
+        }
+        
+        .show-breaks-btn:hover {
+            background: #8e44ad;
+        }
+        
+        /* Кнопка "Изменить" удалена */
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .action-buttons button {
+            flex: 1;
+            min-width: 140px;
+        }
+        
+        .view-schedule {
+            background: #27ae60;
+        }
+        
+        .view-schedule:hover {
+            background: #219653;
+        }
+        
+        .clear-data {
+            background: #e74c3c;
+        }
+        
+        .clear-data:hover {
+            background: #c0392b;
+        }
+        
+        .data-menu {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .menu-btn {
+            background: #9b59b6;
+            position: relative;
+            padding-right: 30px;
+        }
+        
+        .menu-btn:hover {
+            background: #8e44ad;
+        }
+        
+        .menu-btn::after {
+            content: "▾";
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+        }
+        
+        .dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            margin-top: 5px;
+        }
+        
+        .dropdown.show {
+            display: block;
+        }
+        
+        .dropdown button {
+            background: none;
+            color: #333;
+            border: none;
+            border-bottom: 1px solid #eee;
+            border-radius: 0;
+            text-align: left;
+            padding: 12px 15px;
+            font-weight: normal;
+        }
+        
+        .dropdown button:hover {
+            background: #f8f9fa;
+            color: #2c3e50;
+        }
+        
+        .dropdown button:last-child {
+            border-bottom: none;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 90%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #7f8c8d;
+            width: auto;
+        }
+        
+        .breaks-list {
+            margin-top: 10px;
+            overflow-y: auto;
+            max-height: 300px;
+        }
+        
+        .break-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .break-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .break-actions button {
+            padding: 4px 8px;
+            font-size: 0.7rem;
+        }
+        
+        .total-breaks {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            font-weight: bold;
+        }
+        
+        .add-break-form {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .form-row .input-group {
+            flex: 1;
+        }
+        
+        .pdf-view {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            z-index: 1001;
+            overflow: hidden;
+            flex-direction: column;
+        }
+        
+        .pdf-header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding: 15px 10px 10px 10px;
+            border-bottom: 2px solid #eee;
+            flex-shrink: 0;
+        }
+        
+        .pdf-timeline-container {
+            width: 100%;
+            flex: 1;
+            overflow: auto;
+            padding: 0 10px;
+        }
+        
+        /* ВОССТАНОВЛЕНИЕ МАСШТАБА PDF */
+        .pdf-timeline-header {
+            display: flex;
+            height: 25px;
+            margin-left: 150px; 
+            min-width: max-content;
+        }
+        
+        .pdf-timeline-footer {
+            display: flex;
+            height: 25px;
+            margin-left: 150px;
+            min-width: max-content;
+            margin-top: 5px;
+        }
+        
+        .pdf-time-slot {
+            flex: 0 0 30px; 
+            text-align: center;
+            padding: 4px 0;
+            /* Измененный размер для лучшего размещения HH:MM */
+            font-size: 0.6rem;
+            border-left: 1px solid #ddd;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 30px;
+        }
+        
+        .pdf-employee-row {
+            display: flex;
+            min-height: 45px;
+            margin-bottom: 6px;
+            min-width: max-content;
+        }
+        
+        .pdf-employee-info {
+            flex: 0 0 150px;
+            padding: 4px;
+            background: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-right: 2px solid #bdc3c7;
+            font-size: 0.8rem;
+            min-width: 150px;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+        }
+        
+        .pdf-time-cells {
+            display: flex;
+            flex: 1;
+            min-width: max-content;
+        }
+        
+        .pdf-time-cell {
+            flex: 0 0 30px;
+            border: 1px solid #ddd;
+            border-left: none;
+            /* Бледно-синий градиент для Нерабочего времени в PDF */
+            background: #f0f8ff;
+            min-width: 30px;
+        }
+
+        /* Насыщенный синий для рабочего времени в PDF */
+        .pdf-time-cell.working-time-cell {
+            background: #3498db; 
+            background: linear-gradient(to right, #3498db, #4aa8de);
+        }
+        
+        .pdf-time-cell.break {
+            background: #e74c3c;
+        }
+        
+        /* Стиль для конфликтных зон в PDF */
+        .pdf-time-cell.conflict {
+            background: #c0392b; 
+            border: 1px dashed #fff !important;
+        }
+
+        .pdf-close {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            z-index: 1002;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .share-container {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 15px 0;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        
+        .share-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background 0.3s;
+            width: 55px;
+            height: 55px;
+        }
+        
+        .share-btn:hover {
+            background: #e8f4fc;
+        }
+        
+        .share-icon {
+            width: 25px;
+            height: 25px;
+            margin-bottom: 4px;
+        }
+        
+        .share-text {
+            font-size: 0.65rem;
+            color: #2c3e50;
+        }
+        
+        .preview-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1003;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .preview-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+        
+        .preview-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .preview-buttons button {
+            width: auto;
+            padding: 10px 20px;
+        }
+        
+        @media (max-width: 480px) {
+            /* ВОССТАНОВЛЕНИЕ МАСШТАБА для мобильных устройств */
+            .time-slot, .time-cell {
+                flex: 0 0 28px;
+                min-width: 28px;
+                font-size: 0.6rem;
+            }
+            
+            .employee-info {
+                flex: 0 0 120px; 
+                min-width: 120px;
+            }
+
+            .timeline-header, .timeline-footer {
+                margin-left: 120px; 
+            }
+            
+            .employee-name {
+                font-size: 0.8rem;
+            }
+            
+            .employee-position {
+                font-size: 0.7rem;
+            }
+            
+            .pdf-time-slot, .pdf-time-cell {
+                flex: 0 0 28px;
+                min-width: 28px;
+                font-size: 0.6rem;
+            }
+            
+            .pdf-employee-info {
+                flex: 0 0 120px;
+                min-width: 120px;
+                font-size: 0.7rem;
+            }
+            
+            .pdf-timeline-header, .pdf-timeline-footer {
+                margin-left: 120px;
+            }
+            
+            .share-btn {
+                width: 50px;
+                height: 50px;
+            }
+            
+            .share-icon {
+                width: 22px;
+                height: 22px;
+            }
+            
+            .action-buttons button {
+                min-width: 120px;
+            }
+        }
+        
+        @media (orientation: landscape) {
+            .pdf-timeline-container {
+                transform: scale(0.85);
+                transform-origin: top center;
+            }
+        }
+        
+        @media (orientation: portrait) {
+            .pdf-timeline-container {
+                transform: scale(0.9);
+                transform-origin: top center;
+            }
+        }
+        
+        .export-container {
+            width: 100%;
+            overflow: auto;
+        }
+        
+        .file-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Контроль перерывов сотрудников</h1>
+        
+        <div class="controls">
+            <p style="font-size: 0.75rem; color: #7f8c8d; margin-bottom: 5px;">* Эти поля определяют **общую область отображения** таймлайна.</p>
+            <div class="input-group-row" style="display: flex; gap: 10px;">
+                <div class="input-group" style="flex: 1;">
+                    <label for="shiftStart">Начало глобального таймлайна</label>
+                    <input type="time" id="shiftStart" step="900" value="09:45">
+                </div>
+                <div class="input-group" style="flex: 1;">
+                    <label for="shiftEnd">Конец глобального таймлайна</label>
+                    <input type="time" id="shiftEnd" step="900" value="22:45">
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label for="employeeName">Имя сотрудника</label>
+                <input type="text" id="employeeName" placeholder="Введите имя">
+            </div>
+            
+            <div class="input-group">
+                <label for="employeePosition">Должность</label>
+                <input type="text" id="employeePosition" placeholder="Введите должность">
+            </div>
+
+            <div class="input-group-row" style="display: flex; gap: 10px;">
+                <div class="input-group" style="flex: 1;">
+                    <label for="employeeShiftStart">Начало смены сотрудника</label>
+                    <input type="time" id="employeeShiftStart" step="900" value="09:45">
+                </div>
+                <div class="input-group" style="flex: 1;">
+                    <label for="employeeShiftEnd">Конец смены сотрудника</label>
+                    <input type="time" id="employeeShiftEnd" step="900" value="22:45">
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label>&nbsp;</label>
+                <button id="addEmployee">Добавить сотрудника</button>
+            </div>
+        </div>
+        
+        <div class="timeline-container">
+            <div class="timeline-header" id="timelineHeader">
+                </div>
+            
+            <div id="employeesContainer">
+                </div>
+            
+            <div class="timeline-footer" id="timelineFooter">
+                </div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color working-time"></div>
+                <span>Рабочее время сотрудника (Насыщенно-синий)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color non-working-time"></div>
+                <span>Нерабочее время (Бледно-синий)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color break-time"></div>
+                <span>Перерыв (Красный)</span>
+            </div>
+             <div class="legend-item">
+                <div class="legend-color conflict-time"></div>
+                <span>Конфликт (2+ перерыва)</span>
+            </div>
+        </div>
+        
+        <div class="action-buttons">
+            <button class="view-schedule" id="viewSchedule">Посмотреть график</button>
+            <button class="clear-data" id="clearData">Очистить все данные</button>
+            <div class="data-menu">
+                <button class="menu-btn" id="dataMenuBtn">▾ Данные</button>
+                <div class="dropdown" id="dataDropdown">
+                    <button onclick="exportToJSON()">📤 Экспорт JSON</button>
+                    <button onclick="importJSON()">📥 Импорт JSON</button>
+                    <button onclick="copySchedule('brief')">📋 Краткое расписание</button>
+                    <button onclick="copySchedule('detailed')">📊 Детальное расписание</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal" id="previewModal">
+            <div class="modal-content preview-content">
+                <h2>Подтвердите экспорт</h2>
+                <p id="previewText"></p>
+                <div class="preview-buttons">
+                    <button id="confirmActionButton">Подтвердить</button>
+                    <button class="clear-data" onclick="closePreviewModal()">Отмена</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal" id="editModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Редактировать сотрудника</h2>
+                    <button class="close-modal" onclick="closeEditModal()">×</button>
+                </div>
+                <div class="input-group">
+                    <label for="editEmployeeName">Имя сотрудника</label>
+                    <input type="text" id="editEmployeeName">
+                </div>
+                <div class="input-group">
+                    <label for="editEmployeePosition">Должность</label>
+                    <input type="text" id="editEmployeePosition">
+                </div>
+                <div class="input-group-row" style="display: flex; gap: 10px;">
+                    <div class="input-group" style="flex: 1;">
+                        <label for="editEmployeeShiftStart">Начало смены</label>
+                        <input type="time" id="editEmployeeShiftStart" step="900">
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <label for="editEmployeeShiftEnd">Конец смены</label>
+                        <input type="time" id="editEmployeeShiftEnd" step="900">
+                    </div>
+                </div>
+                <button id="saveEmployeeEditBtn" style="margin-top: 15px;">Сохранить изменения</button>
+                <button id="removeEmployeeBtn" class="clear-data" style="margin-top: 10px;">Удалить сотрудника</button>
+            </div>
+        </div>
+
+        <div class="modal" id="breaksModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="breaksModalTitle">Перерывы</h2>
+                    <button class="close-modal" onclick="closeBreaksModal()">×</button>
+                </div>
+                
+                <div class="employee-total-breaks" id="totalBreakTime"></div>
+                
+                <div class="breaks-list" id="breaksList">
+                    </div>
+
+                <div class="add-break-form">
+                    <h3>Добавить перерыв (15 мин)</h3>
+                    <div class="form-row">
+                        <div class="input-group">
+                            <label for="breakStart">Начало</label>
+                            <input type="time" id="breakStart" step="900" value="12:00">
+                        </div>
+                        <div class="input-group">
+                            <label for="breakDuration">Продолж-ть (мин)</label>
+                            <select id="breakDuration">
+                                <option value="15">15</option>
+                                <option value="30">30</option>
+                                <option value="45">45</option>
+                                <option value="60">60</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="addBreakBtn">Добавить</button>
+                </div>
+            </div>
+        </div>
+        
+        <input type="file" id="jsonFileInput" class="file-input" accept=".json">
+
+    </div>
+
+    <div class="pdf-view" id="pdfView">
+        <button class="pdf-close" id="pdfClose">×</button>
+        <div class="pdf-header">
+            <h2>График перерывов сотрудников</h2>
+            <p id="pdfDate"></p>
+        </div>
+        
+        <div class="share-container">
+             <button class="share-btn" onclick="showPreview('telegram')">
+                <svg class="share-icon" viewBox="0 0 24 24" fill="#0088cc">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.160-.295.295-.605.295l.213-3.053 5.56-5.022c.242-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.652-.64.136-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+                </svg>
+                <span class="share-text">Telegram</span>
+            </button>
+            <button class="share-btn" onclick="showPreview('whatsapp')">
+                <svg class="share-icon" viewBox="0 0 24 24" fill="#25D366">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.150-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.864 3.488"/>
+                </svg>
+                <span class="share-text">WhatsApp</span>
+            </button>
+            <button class="share-btn" onclick="showPreview('pdf')">
+                <svg class="share-icon" viewBox="0 0 24 24" fill="#E74C3C">
+                    <path d="M18 2h-8L4 8v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-2 10h-3v4h-2v-4H8l4-4 4 4z"/>
+                </svg>
+                <span class="share-text">PDF</span>
+            </button>
+            <button class="share-btn" onclick="showPreview('image')">
+                 <svg class="share-icon" viewBox="0 0 24 24" fill="#3498db">
+                    <path d="M5 19h14v-6.5l-3.5 3.5-3.5-3.5-3.5 3.5L5 12.5V19zM19 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm-4.86 8.86l-3 3-2.14-2.14L3 17V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.5-3.5-2.64-2.64z"/>
+                </svg>
+                <span class="share-text">Изображение</span>
+            </button>
+        </div>
+        
+        <div class="pdf-timeline-container" id="pdfTimelineContainer">
+            </div>
+        <canvas id="pdfCanvas" style="display:none;"></canvas>
+    </div>
+
+    <script>
+        // Глобальные переменные
+        let employees = [];
+        let workStart = new Date(); // Начало глобального таймлайна
+        let workEnd = new Date();   // Конец глобального таймлайна
+        let selectedEmployeeId = null; 
+        
+        // Элементы DOM
+        const addEmployeeBtn = document.getElementById('addEmployee');
+        const employeeNameInput = document.getElementById('employeeName');
+        const employeePositionInput = document.getElementById('employeePosition');
+        const employeeShiftStartInput = document.getElementById('employeeShiftStart');
+        const employeeShiftEndInput = document.getElementById('employeeShiftEnd');
+        const employeesContainer = document.getElementById('employeesContainer');
+        const timelineHeader = document.getElementById('timelineHeader');
+        const timelineFooter = document.getElementById('timelineFooter');
+        const viewScheduleBtn = document.getElementById('viewSchedule');
+        const clearDataBtn = document.getElementById('clearData');
+        const shiftStartInput = document.getElementById('shiftStart');
+        const shiftEndInput = document.getElementById('shiftEnd');
+
+        // Модальные окна и их элементы
+        const editModal = document.getElementById('editModal');
+        const breaksModal = document.getElementById('breaksModal');
+        const editEmployeeNameInput = document.getElementById('editEmployeeName');
+        const editEmployeePositionInput = document.getElementById('editEmployeePosition');
+        const editEmployeeShiftStartInput = document.getElementById('editEmployeeShiftStart');
+        const editEmployeeShiftEndInput = document.getElementById('editEmployeeShiftEnd');
+        const saveEmployeeEditBtn = document.getElementById('saveEmployeeEditBtn');
+        const removeEmployeeBtn = document.getElementById('removeEmployeeBtn');
+        const breaksList = document.getElementById('breaksList');
+        const addBreakBtn = document.getElementById('addBreakBtn');
+        const breakStartInput = document.getElementById('breakStart');
+        const breakDurationSelect = document.getElementById('breakDuration');
+        const totalBreakTimeElement = document.getElementById('totalBreakTime');
+
+        // Элементы меню данных
+        const dataMenuBtn = document.getElementById('dataMenuBtn');
+        const dataDropdown = document.getElementById('dataDropdown');
+        const jsonFileInput = document.getElementById('jsonFileInput');
+        
+        // Элементы PDF View
+        const pdfView = document.getElementById('pdfView');
+        const pdfCloseBtn = document.getElementById('pdfClose');
+        const pdfTimelineContainer = document.getElementById('pdfTimelineContainer');
+        const pdfDateElement = document.getElementById('pdfDate');
+
+        // Элементы Preview Modal
+        const previewModal = document.getElementById('previewModal');
+        const previewText = document.getElementById('previewText');
+        const confirmActionButton = document.getElementById('confirmActionButton');
+        let currentAction = null; // Хранит действие (telegram, whatsapp, pdf, image)
+
+        // --- Вспомогательные функции для работы со временем ---
+
+        /**
+         * Парсит строку времени "HH:MM" в объект Date.
+         * @param {string} timeStr - Время в формате "HH:MM".
+         * @returns {Date} Объект Date с установленным временем.
+         */
+        function parseTime(timeStr) {
+            const now = new Date();
+            if (!timeStr) return now;
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            now.setHours(hours, minutes, 0, 0);
+            return now;
+        }
+
+        /**
+         * Форматирует объект Date в строку времени "HH:MM".
+         * @param {Date} date - Объект Date.
+         * @returns {string} Время в формате "HH:MM".
+         */
+        function formatTime(date) {
+            return date.toTimeString().slice(0, 5);
+        }
+
+        /**
+         * Рассчитывает общее время перерывов сотрудника в минутах.
+         * @param {Object} employee - Объект сотрудника.
+         * @returns {number} Общее время перерывов в минутах.
+         */
+        function calculateTotalBreakDuration(employee) {
+            return employee.breaks.reduce((total, br) => {
+                const durationMs = br.end.getTime() - br.start.getTime();
+                return total + Math.round(durationMs / (1000 * 60)); // Длительность в минутах
+            }, 0);
+        }
+
+        /**
+         * Проверяет, находится ли перерыв в рабочее время.
+         * @param {Date} breakStart - Начало перерыва.
+         * @param {Date} breakEnd - Конец перерыва.
+         * @param {Date} shiftStart - Начало смены.
+         * @param {Date} shiftEnd - Конец смены.
+         * @returns {boolean} True, если перерыв полностью находится в смене.
+         */
+        function isBreakInShift(breakStart, breakEnd, shiftStart, shiftEnd) {
+             // Проверка на то, что перерыв начинается не раньше начала смены
+            const startsAfterShiftStart = breakStart.getTime() >= shiftStart.getTime();
+            // Проверка на то, что перерыв заканчивается не позже конца смены
+            const endsBeforeShiftEnd = breakEnd.getTime() <= shiftEnd.getTime();
+            
+            return startsAfterShiftStart && endsBeforeShiftEnd;
+        }
+
+        // --- Логика рендеринга и обработки данных ---
+
+        /**
+         * Обновляет глобальные переменные workStart/workEnd и перерисовывает таймлайн.
+         * @param {boolean} shouldRender - Флаг, указывающий, нужно ли перерисовать график.
+         */
+        function updateShiftTimes(shouldRender = true) {
+            const startStr = shiftStartInput.value;
+            const endStr = shiftEndInput.value;
+
+            workStart = parseTime(startStr);
+            workEnd = parseTime(endStr);
+            
+            // Если конец смены раньше начала (например, 23:00 - 07:00), 
+            // переносим workEnd на следующий день для корректного расчета
+            if (workEnd.getTime() <= workStart.getTime()) {
+                workEnd.setDate(workEnd.getDate() + 1);
+            }
+            
+            if (shouldRender) {
+                saveToLocalStorage();
+                generateTimelineHeaders();
+                renderEmployees();
+            }
+        }
+        
+        /**
+         * Генерирует и отображает временные заголовки (шкалу) таймлайна.
+         */
+        function generateTimelineHeaders() {
+            timelineHeader.innerHTML = '';
+            timelineFooter.innerHTML = '';
+
+            const totalMinutes = (workEnd.getTime() - workStart.getTime()) / (1000 * 60);
+            const numSlots = totalMinutes / 15; // 15-минутные интервалы
+
+            let currentTime = new Date(workStart);
+
+            for (let i = 0; i < numSlots; i++) {
+                const isHourMark = currentTime.getMinutes() === 0;
+                // ИЗМЕНЕНИЕ: Отображаем время в КАЖДОМ 15-минутном слоте
+                const timeText = formatTime(currentTime);
+                
+                // Header
+                const headerSlot = document.createElement('div');
+                headerSlot.className = 'time-slot';
+                headerSlot.textContent = timeText; // <-- Устанавливаем HH:MM
+                headerSlot.style.borderLeft = isHourMark ? '2px solid #aaa' : '1px solid #ddd';
+                timelineHeader.appendChild(headerSlot);
+                
+                // Footer (для визуального выравнивания)
+                const footerSlot = document.createElement('div');
+                footerSlot.className = 'time-slot';
+                footerSlot.textContent = timeText; // <-- Устанавливаем HH:MM
+                footerSlot.style.borderLeft = isHourMark ? '2px solid #aaa' : '1px solid #ddd';
+                timelineFooter.appendChild(footerSlot);
+
+                // Переход к следующему 15-минутному интервалу
+                currentTime.setMinutes(currentTime.getMinutes() + 15);
+            }
+            
+            // Также генерируем заголовки для PDF
+            generatePdfTimelineHeaders();
+        }
+
+        /**
+         * Генерирует и отображает временные заголовки для PDF-представления.
+         */
+        function generatePdfTimelineHeaders() {
+            pdfTimelineContainer.innerHTML = ''; // Очистка перед рендерингом
+            
+            // Создаем шапку
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'pdf-timeline-header';
+            
+            const totalMinutes = (workEnd.getTime() - workStart.getTime()) / (1000 * 60);
+            const numSlots = totalMinutes / 15;
+
+            let currentTime = new Date(workStart);
+
+            for (let i = 0; i < numSlots; i++) {
+                const isHourMark = currentTime.getMinutes() === 0;
+                // ИЗМЕНЕНИЕ: Отображаем время в КАЖДОМ 15-минутном слоте
+                const timeText = formatTime(currentTime);
+                
+                const headerSlot = document.createElement('div');
+                headerSlot.className = 'pdf-time-slot';
+                headerSlot.textContent = timeText; // <-- Устанавливаем HH:MM
+                headerSlot.style.borderLeft = isHourMark ? '2px solid #aaa' : '1px solid #ddd';
+                headerDiv.appendChild(headerSlot);
+
+                currentTime.setMinutes(currentTime.getMinutes() + 15);
+            }
+
+            pdfTimelineContainer.appendChild(headerDiv);
+        }
+
+        /**
+         * Отрисовывает всех сотрудников и их графики.
+         */
+        function renderEmployees() {
+            employeesContainer.innerHTML = ''; // Очистка контейнера
+
+            // 1. Считаем конфликты
+            const conflictMap = calculateBreakConflicts();
+
+            // 2. Рендерим сотрудников
+            employees.forEach(employee => {
+                const employeeRow = document.createElement('div');
+                employeeRow.className = 'employee-row';
+                employeeRow.dataset.employeeId = employee.id;
+                
+                // --- Колонка информации о сотруднике (Sticky) ---
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'employee-info';
+                
+                const nameSpan = document.createElement('div');
+                nameSpan.className = 'employee-name';
+                nameSpan.textContent = employee.name;
+                nameSpan.onclick = () => openEditModal(employee.id); // Клик для открытия модального окна
+                
+                const positionSpan = document.createElement('div');
+                positionSpan.className = 'employee-position';
+                positionSpan.textContent = employee.position;
+                positionSpan.onclick = () => openEditModal(employee.id); // Клик для открытия модального окна
+                
+                const workHoursSpan = document.createElement('div');
+                workHoursSpan.className = 'employee-work-hours';
+                workHoursSpan.textContent = `${formatTime(employee.shiftStart)} - ${formatTime(employee.shiftEnd)}`;
+
+                const totalBreaksSpan = document.createElement('div');
+                totalBreaksSpan.className = 'employee-total-breaks';
+                const totalDuration = calculateTotalBreakDuration(employee);
+                totalBreaksSpan.textContent = `Перерывы: ${totalDuration} мин`;
+
+                const controlsDiv = document.createElement('div');
+                controlsDiv.className = 'employee-controls';
+
+                const breaksBtn = document.createElement('button');
+                breaksBtn.className = 'show-breaks-btn';
+                breaksBtn.textContent = 'Упр. перерывами';
+                breaksBtn.onclick = () => showBreaks(employee.id);
+
+                controlsDiv.appendChild(breaksBtn);
+                
+                infoDiv.appendChild(nameSpan);
+                infoDiv.appendChild(positionSpan);
+                infoDiv.appendChild(workHoursSpan);
+                infoDiv.appendChild(totalBreaksSpan);
+                infoDiv.appendChild(controlsDiv);
+                
+                employeeRow.appendChild(infoDiv);
+
+                // --- Ячейки времени ---
+                const cellsDiv = document.createElement('div');
+                cellsDiv.className = 'time-cells';
+                
+                const totalMinutes = (workEnd.getTime() - workStart.getTime()) / (1000 * 60);
+                const numSlots = totalMinutes / 15;
+                let currentTime = new Date(workStart);
+                
+                // Определяем фактическое время окончания смены сотрудника (учитывая ночные смены)
+                const employeeShiftEnd = new Date(employee.shiftEnd);
+                if (employeeShiftEnd.getTime() <= employee.shiftStart.getTime()) {
+                    employeeShiftEnd.setDate(employeeShiftEnd.getDate() + 1);
+                }
+
+                for (let i = 0; i < numSlots; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'time-cell';
+                    cell.dataset.time = formatTime(currentTime);
+
+                    const intervalStart = new Date(currentTime);
+                    currentTime.setMinutes(currentTime.getMinutes() + 15);
+                    const intervalEnd = new Date(currentTime);
+                    
+                    // Проверка: Рабочее ли время?
+                    const isWorking = intervalStart.getTime() >= employee.shiftStart.getTime() && 
+                                      intervalEnd.getTime() <= employeeShiftEnd.getTime();
+                    
+                    if (isWorking) {
+                        cell.classList.add('working-time-cell');
+                    }
+                    
+                    // Проверка: Перерыв ли?
+                    let isBreak = false;
+                    for (const breakItem of employee.breaks) {
+                        // Перерыв начинается в интервале ИЛИ перерыв заканчивается в интервале ИЛИ интервал полностью внутри перерыва
+                        if (intervalStart.getTime() < breakItem.end.getTime() && intervalEnd.getTime() > breakItem.start.getTime()) {
+                            isBreak = true;
+                            break;
+                        }
+                    }
+                    
+                    if (isBreak) {
+                        cell.classList.add('break');
+                    }
+                    
+                    // Проверка: Конфликт ли?
+                    if (conflictMap[intervalStart.getTime()] && conflictMap[intervalStart.getTime()].count > 1) {
+                         // Проверяем, участвует ли данный сотрудник в конфликте в этом слоте
+                        if (conflictMap[intervalStart.getTime()].employees.includes(employee.id)) {
+                             cell.classList.add('conflict');
+                        }
+                    }
+
+                    cellsDiv.appendChild(cell);
+                }
+                
+                employeeRow.appendChild(cellsDiv);
+                employeesContainer.appendChild(employeeRow);
+            });
+            
+            saveToLocalStorage(); // Сохраняем данные после рендеринга
+        }
+
+        /**
+         * Добавляет нового сотрудника в список.
+         */
+        function addEmployee() {
+            const name = employeeNameInput.value.trim();
+            const position = employeePositionInput.value.trim();
+            const shiftStartStr = employeeShiftStartInput.value;
+            const shiftEndStr = employeeShiftEndInput.value;
+
+            if (!name || !shiftStartStr || !shiftEndStr) {
+                alert('Пожалуйста, заполните Имя, Начало и Конец смены.');
+                return;
+            }
+
+            const newEmployee = {
+                id: Date.now(), // Простой уникальный ID
+                name: name,
+                position: position,
+                shiftStart: parseTime(shiftStartStr),
+                shiftEnd: parseTime(shiftEndStr),
+                breaks: []
+            };
+
+            // Проверка на ночную смену и корректировка
+            if (newEmployee.shiftEnd.getTime() <= newEmployee.shiftStart.getTime()) {
+                newEmployee.shiftEnd.setDate(newEmployee.shiftEnd.getDate() + 1);
+            }
+
+            employees.push(newEmployee);
+            
+            // Очистка полей ввода сотрудника, кроме времени
+            employeeNameInput.value = '';
+            employeePositionInput.value = '';
+            
+            renderEmployees();
+        }
+        
+        /**
+         * Рассчитывает, сколько перерывов приходится на каждый 15-минутный интервал.
+         * @returns {Object} Объект, где ключ - это timestamp начала 15-мин. интервала, 
+         * а значение - {count: number, employees: Array<number>}.
+         */
+        function calculateBreakConflicts() {
+            const conflictMap = {}; // Key: timestamp (15 min interval start), Value: {count, employees}
+
+            const totalMinutes = (workEnd.getTime() - workStart.getTime()) / (1000 * 60);
+            const numSlots = totalMinutes / 15;
+            let currentTime = new Date(workStart);
+            
+            // Инициализация карты конфликтов по всем слотам
+            for (let i = 0; i < numSlots; i++) {
+                conflictMap[currentTime.getTime()] = { count: 0, employees: [] };
+                currentTime.setMinutes(currentTime.getMinutes() + 15);
+            }
+
+            employees.forEach(employee => {
+                employee.breaks.forEach(breakItem => {
+                    let breakTime = new Date(breakItem.start);
+                    
+                    // Определяем фактическое время окончания перерыва (учитывая, что он может быть длинным)
+                    const breakEndTime = new Date(breakItem.end);
+                    
+                    // Проходим по 15-минутным слотам в рамках перерыва
+                    while (breakTime.getTime() < breakEndTime.getTime()) {
+                        // Находим начало 15-минутного интервала, в который попадает breakTime.
+                        // Если breakTime не совпадает с началом интервала, берем ближайшее прошлое начало интервала.
+                        let slotStart = new Date(breakTime);
+                        slotStart.setMinutes(Math.floor(slotStart.getMinutes() / 15) * 15);
+                        slotStart.setSeconds(0, 0);
+                        
+                        // Если этот слот находится в общем таймлайне
+                        if (slotStart.getTime() >= workStart.getTime() && slotStart.getTime() < workEnd.getTime()) {
+                            const key = slotStart.getTime();
+                            if (conflictMap[key]) {
+                                conflictMap[key].count++;
+                                if (!conflictMap[key].employees.includes(employee.id)) {
+                                     conflictMap[key].employees.push(employee.id);
+                                }
+                            }
+                        }
+                        
+                        // Переходим к следующему 15-минутному интервалу
+                        breakTime.setMinutes(breakTime.getMinutes() + 15);
+                        
+                        // Важно: если перерыв очень длинный (на несколько дней), нужно обеспечить выход
+                        if (breakTime.getTime() > workEnd.getTime() + (1000 * 60 * 60 * 24)) break; // Защита от бесконечного цикла
+                    }
+                });
+            });
+
+            return conflictMap;
+        }
+
+
+        // --- Логика модальных окон (Редактирование сотрудника) ---
+
+        /**
+         * Открывает модальное окно редактирования сотрудника.
+         * @param {number} id - ID сотрудника.
+         */
+        function openEditModal(id) {
+            const employee = employees.find(emp => emp.id === id);
+            if (!employee) return;
+
+            selectedEmployeeId = id;
+            
+            editEmployeeNameInput.value = employee.name;
+            editEmployeePositionInput.value = employee.position;
+            editEmployeeShiftStartInput.value = formatTime(employee.shiftStart);
+            
+            // Если смена ночная, время конца смены может быть меньше времени начала. 
+            // Однако в инпуте нужно показать просто время HH:MM.
+            editEmployeeShiftEndInput.value = formatTime(employee.shiftEnd); 
+            
+            editModal.style.display = 'flex';
+        }
+
+        /**
+         * Закрывает модальное окно редактирования сотрудника.
+         */
+        function closeEditModal() {
+            editModal.style.display = 'none';
+            selectedEmployeeId = null;
+        }
+
+        /**
+         * Сохраняет изменения сотрудника.
+         */
+        function saveEmployeeEdit() {
+            const employee = employees.find(emp => emp.id === selectedEmployeeId);
+            if (!employee) return;
+            
+            const newName = editEmployeeNameInput.value.trim();
+            const newPosition = editEmployeePositionInput.value.trim();
+            const newShiftStartStr = editEmployeeShiftStartInput.value;
+            const newShiftEndStr = editEmployeeShiftEndInput.value;
+
+            if (!newName || !newShiftStartStr || !newShiftEndStr) {
+                 alert('Пожалуйста, заполните Имя, Начало и Конец смены.');
+                 return;
+            }
+
+            employee.name = newName;
+            employee.position = newPosition;
+            
+            // Обновляем время начала и конца смены
+            employee.shiftStart = parseTime(newShiftStartStr);
+            employee.shiftEnd = parseTime(newShiftEndStr);
+
+            // Корректировка для ночной смены
+            if (employee.shiftEnd.getTime() <= employee.shiftStart.getTime()) {
+                employee.shiftEnd.setDate(employee.shiftEnd.getDate() + 1);
+            }
+            
+            // Проверяем и удаляем перерывы, которые вышли за рамки новой смены
+            employee.breaks = employee.breaks.filter(br => 
+                isBreakInShift(br.start, br.end, employee.shiftStart, employee.shiftEnd)
+            );
+            
+            closeEditModal();
+            renderEmployees();
+        }
+        
+        /**
+         * Удаляет сотрудника.
+         */
+        function removeEmployee() {
+             if (confirm(`Вы уверены, что хотите удалить сотрудника ${editEmployeeNameInput.value}?`)) {
+                employees = employees.filter(emp => emp.id !== selectedEmployeeId);
+                closeEditModal();
+                renderEmployees();
+            }
+        }
+
+
+        // --- Логика модальных окон (Перерывы) ---
+
+        /**
+         * Открывает модальное окно управления перерывами.
+         * @param {number} id - ID сотрудника.
+         */
+        function showBreaks(id) {
+            const employee = employees.find(emp => emp.id === id);
+            if (!employee) return;
+
+            selectedEmployeeId = id;
+            document.getElementById('breaksModalTitle').textContent = `Перерывы: ${employee.name}`;
+            renderBreaksList(employee);
+            
+            // Установка времени по умолчанию для добавления перерыва: 
+            // 1. Берем дефолтное время 12:00, но в рамках смены сотрудника.
+            // 2. Если 12:00 вне смены, ставим начало смены сотрудника.
+            let defaultBreakTime = parseTime('12:00');
+            
+            // Если 12:00 раньше начала смены ИЛИ 12:00 позже конца смены (с учетом ночных)
+            const employeeShiftEnd = new Date(employee.shiftEnd);
+            if (employeeShiftEnd.getTime() <= employee.shiftStart.getTime()) {
+                employeeShiftEnd.setDate(employeeShiftEnd.getDate() + 1);
+            }
+
+            if (defaultBreakTime.getTime() < employee.shiftStart.getTime() || defaultBreakTime.getTime() > employeeShiftEnd.getTime()) {
+                 defaultBreakTime = new Date(employee.shiftStart);
+            }
+
+            breakStartInput.value = formatTime(defaultBreakTime);
+
+            breaksModal.style.display = 'flex';
+        }
+
+        /**
+         * Закрывает модальное окно управления перерывами.
+         */
+        function closeBreaksModal() {
+            breaksModal.style.display = 'none';
+            selectedEmployeeId = null;
+        }
+
+        /**
+         * Рендерит список перерывов для выбранного сотрудника.
+         * @param {Object} employee - Объект сотрудника.
+         */
+        function renderBreaksList(employee) {
+            breaksList.innerHTML = '';
+            
+            if (employee.breaks.length === 0) {
+                breaksList.innerHTML = '<p style="text-align: center; color: #7f8c8d;">Перерывов пока нет.</p>';
+            }
+
+            employee.breaks.sort((a, b) => a.start.getTime() - b.start.getTime()).forEach((br, index) => {
+                const breakItem = document.createElement('div');
+                breakItem.className = 'break-item';
+                
+                const durationMs = br.end.getTime() - br.start.getTime();
+                const durationMinutes = Math.round(durationMs / (1000 * 60));
+
+                const breakInfo = document.createElement('span');
+                breakInfo.textContent = `${formatTime(br.start)} - ${formatTime(br.end)} (${durationMinutes} мин)`;
+
+                const breakActions = document.createElement('div');
+                breakActions.className = 'break-actions';
+
+                // Кнопка "Удалить"
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'Удалить';
+                removeBtn.className = 'clear-data';
+                removeBtn.onclick = () => removeBreak(employee.id, index);
+
+                breakActions.appendChild(removeBtn);
+                
+                breakItem.appendChild(breakInfo);
+                breakItem.appendChild(breakActions);
+                breaksList.appendChild(breakItem);
+            });
+            
+            // Обновляем общее время перерывов
+            const totalDuration = calculateTotalBreakDuration(employee);
+            totalBreakTimeElement.textContent = `Общее время перерывов: ${totalDuration} мин`;
+        }
+        
+        /**
+         * Добавляет новый перерыв.
+         */
+        function addBreak() {
+            const employee = employees.find(emp => emp.id === selectedEmployeeId);
+            if (!employee) return;
+            
+            const startStr = breakStartInput.value;
+            const durationMinutes = parseInt(breakDurationSelect.value);
+            
+            if (!startStr) {
+                alert('Укажите время начала.');
+                return;
+            }
+
+            const breakStart = parseTime(startStr);
+            const breakEnd = new Date(breakStart.getTime() + durationMinutes * 60000);
+
+            // Проверка на то, что перерыв не выходит за границы смены сотрудника
+            if (!isBreakInShift(breakStart, breakEnd, employee.shiftStart, employee.shiftEnd)) {
+                alert('Перерыв должен быть полностью в рамках смены сотрудника.');
+                return;
+            }
+            
+            const newBreak = { start: breakStart, end: breakEnd };
+            employee.breaks.push(newBreak);
+            
+            renderBreaksList(employee); // Перерисовываем список
+            renderEmployees(); // Перерисовываем главный график
+        }
+
+        /**
+         * Удаляет перерыв.
+         * @param {number} employeeId - ID сотрудника.
+         * @param {number} breakIndex - Индекс перерыва в массиве.
+         */
+        function removeBreak(employeeId, breakIndex) {
+            const employee = employees.find(emp => emp.id === employeeId);
+            if (!employee) return;
+
+            employee.breaks.splice(breakIndex, 1);
+            
+            renderBreaksList(employee);
+            renderEmployees();
+        }
+
+
+        // --- Логика экспорта/импорта/копирования ---
+        
+        /**
+         * Генерирует HTML для PDF-представления.
+         */
+        function generatePdfContent() {
+             // 1. Считаем конфликты
+            const conflictMap = calculateBreakConflicts();
+            
+            // 2. Добавляем строки сотрудников
+            employees.forEach(employee => {
+                const employeeRow = document.createElement('div');
+                employeeRow.className = 'pdf-employee-row';
+                
+                // --- Колонка информации о сотруднике (Sticky) ---
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'pdf-employee-info';
+                
+                const nameSpan = document.createElement('div');
+                nameSpan.style.fontWeight = '600';
+                nameSpan.textContent = employee.name;
+                
+                const positionSpan = document.createElement('div');
+                positionSpan.style.fontSize = '0.9em';
+                positionSpan.textContent = employee.position;
+                
+                const workHoursSpan = document.createElement('div');
+                workHoursSpan.style.fontSize = '0.9em';
+                workHoursSpan.style.color = '#3498db';
+                workHoursSpan.textContent = `${formatTime(employee.shiftStart)} - ${formatTime(employee.shiftEnd)}`;
+
+                const totalBreaksSpan = document.createElement('div');
+                totalBreaksSpan.style.fontSize = '0.9em';
+                totalBreaksSpan.style.color = '#e74c3c';
+                const totalDuration = calculateTotalBreakDuration(employee);
+                totalBreaksSpan.textContent = `Перерывы: ${totalDuration} мин`;
+
+                infoDiv.appendChild(nameSpan);
+                infoDiv.appendChild(positionSpan);
+                infoDiv.appendChild(workHoursSpan);
+                infoDiv.appendChild(totalBreaksSpan);
+                
+                employeeRow.appendChild(infoDiv);
+
+                // --- Ячейки времени ---
+                const cellsDiv = document.createElement('div');
+                cellsDiv.className = 'pdf-time-cells';
+                
+                const totalMinutes = (workEnd.getTime() - workStart.getTime()) / (1000 * 60);
+                const numSlots = totalMinutes / 15;
+                let currentTime = new Date(workStart);
+                
+                // Определяем фактическое время окончания смены сотрудника (учитывая ночные смены)
+                const employeeShiftEnd = new Date(employee.shiftEnd);
+                if (employeeShiftEnd.getTime() <= employee.shiftStart.getTime()) {
+                    employeeShiftEnd.setDate(employeeShiftEnd.getDate() + 1);
+                }
+
+
+                for (let i = 0; i < numSlots; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'pdf-time-cell';
+
+                    const intervalStart = new Date(currentTime);
+                    currentTime.setMinutes(currentTime.getMinutes() + 15);
+                    const intervalEnd = new Date(currentTime);
+                    
+                    // Проверка: Рабочее ли время?
+                    const isWorking = intervalStart.getTime() >= employee.shiftStart.getTime() && 
+                                      intervalEnd.getTime() <= employeeShiftEnd.getTime();
+                    
+                    if (isWorking) {
+                        cell.classList.add('working-time-cell');
+                    }
+                    
+                    // Проверка: Перерыв ли?
+                    let isBreak = false;
+                    for (const breakItem of employee.breaks) {
+                        if (intervalStart.getTime() < breakItem.end.getTime() && intervalEnd.getTime() > breakItem.start.getTime()) {
+                            isBreak = true;
+                            break;
+                        }
+                    }
+                    
+                    if (isBreak) {
+                        cell.classList.add('break');
+                    }
+                    
+                    // Проверка: Конфликт ли?
+                    if (conflictMap[intervalStart.getTime()] && conflictMap[intervalStart.getTime()].count > 1) {
+                         // Проверяем, участвует ли данный сотрудник в конфликте в этом слоте
+                        if (conflictMap[intervalStart.getTime()].employees.includes(employee.id)) {
+                             cell.classList.add('conflict');
+                        }
+                    }
+
+                    cellsDiv.appendChild(cell);
+                }
+                
+                employeeRow.appendChild(cellsDiv);
+                pdfTimelineContainer.appendChild(employeeRow);
+            });
+            
+            // Добавляем легенду
+            const legendDiv = document.createElement('div');
+            legendDiv.className = 'legend';
+            legendDiv.style.justifyContent = 'flex-start'; // Для компактности в PDF
+            
+            const legendItems = [
+                { color: '#3498db', text: 'Рабочее время' },
+                { color: '#f0f8ff', text: 'Нерабочее время' },
+                { color: '#e74c3c', text: 'Перерыв' },
+                { color: '#c0392b', text: 'Конфликт (2+)' }
+            ];
+            
+            legendItems.forEach(item => {
+                const legendItem = document.createElement('div');
+                legendItem.className = 'legend-item';
+                legendItem.style.fontSize = '0.7rem';
+                
+                const colorDiv = document.createElement('div');
+                colorDiv.className = 'legend-color';
+                colorDiv.style.background = item.color;
+                if (item.text.includes('Конфликт')) {
+                    colorDiv.style.border = '1px dashed #fff';
+                } else {
+                    colorDiv.style.border = '1px solid #ddd';
+                }
+                
+                const textSpan = document.createElement('span');
+                textSpan.textContent = item.text;
+                
+                legendItem.appendChild(colorDiv);
+                legendItem.appendChild(textSpan);
+                legendDiv.appendChild(legendItem);
+            });
+            
+            pdfTimelineContainer.appendChild(legendDiv);
+        }
+        
+        /**
+         * Показывает модальное окно предварительного просмотра перед экспортом/отправкой.
+         * @param {string} action - 'telegram', 'whatsapp', 'pdf', 'image'.
+         */
+        function showPreview(action) {
+            currentAction = action;
+            let text = '';
+            
+            switch(action) {
+                case 'telegram':
+                    text = 'Вы хотите поделиться графиком в Telegram? Будет сгенерировано изображение.';
+                    break;
+                case 'whatsapp':
+                    text = 'Вы хотите поделиться графиком в WhatsApp? Будет сгенерировано изображение.';
+                    break;
+                case 'pdf':
+                    text = 'Вы хотите экспортировать график в PDF? Файл будет загружен.';
+                    break;
+                case 'image':
+                    text = 'Вы хотите экспортировать график в виде изображения (PNG)? Файл будет загружен.';
+                    break;
+            }
+            
+            previewText.textContent = text;
+            previewModal.style.display = 'flex';
+        }
+        
+        /**
+         * Закрывает модальное окно предварительного просмотра.
+         */
+        function closePreviewModal() {
+            previewModal.style.display = 'none';
+            currentAction = null;
+            // Сброс кнопки
+            confirmActionButton.textContent = 'Подтвердить';
+            confirmActionButton.disabled = false;
+            confirmActionButton.style.background = '#3498db';
+        }
+
+        /**
+         * Выполняет действие экспорта/отправки.
+         * @param {string} action - 'telegram', 'whatsapp', 'pdf', 'image'.
+         * @param {HTMLButtonElement} button - Кнопка, которую нужно сбросить.
+         */
+        async function shareTo(action, button) {
+            
+            // 1. Открываем PDF View и генерируем контент
+            pdfView.style.display = 'flex';
+            pdfTimelineContainer.innerHTML = '';
+            generatePdfTimelineHeaders(); // Генерируем заголовки
+            generatePdfContent(); // Генерируем содержимое
+
+            // Устанавливаем дату
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('ru-RU', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            pdfDateElement.textContent = `Дата создания: ${dateStr}`;
+
+            // 2. Ждем, чтобы браузер успел отрисовать.
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            const targetElement = document.getElementById('pdfView'); // Захватываем весь PDF View
+            
+            try {
+                const canvas = await html2canvas(targetElement, {
+                    scale: 2, // Увеличение масштаба для лучшего качества
+                    useCORS: true,
+                    scrollX: -window.scrollX,
+                    scrollY: -window.scrollY,
+                    windowWidth: targetElement.scrollWidth,
+                    windowHeight: targetElement.scrollHeight
+                });
+                
+                if (action === 'pdf') {
+                    exportToPDF(canvas);
+                } else {
+                    exportToImage(canvas, action); // Для image, telegram, whatsapp
+                }
+                
+            } catch (error) {
+                console.error('Ошибка при генерации изображения/PDF:', error);
+                alert('Произошла ошибка при генерации файла.');
+            } finally {
+                // 3. Закрываем PDF View и сбрасываем кнопку
+                pdfView.style.display = 'none';
+                button.textContent = 'Подтвердить';
+                button.disabled = false;
+                button.style.background = '#3498db';
+                closePreviewModal();
+            }
+        }
+        
+        /**
+         * Экспортирует график в PDF.
+         * @param {HTMLCanvasElement} canvas - Canvas с изображением графика.
+         */
+        function exportToPDF(canvas) {
+            // Использование jsPDF
+            const { jsPDF } = window.jspdf;
+            
+            // Расчет размеров
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 210; // A4 width in mm
+            const pageHeight = 295; // A4 height in mm
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+            
+            // Создание PDF
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            // Добавление страниц, если контент длинный
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10);
+            pdf.save(`график_перерывов_${dateStr}.pdf`);
+        }
+        
+        /**
+         * Экспортирует график в изображение (PNG) или открывает диалог шаринга.
+         * @param {HTMLCanvasElement} canvas - Canvas с изображением графика.
+         * @param {string} action - 'image', 'telegram', 'whatsapp'.
+         */
+        function exportToImage(canvas, action) {
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10);
+            const fileName = `график_перерывов_${dateStr}.png`;
+            
+            canvas.toBlob(function(blob) {
+                if (navigator.share && (action === 'telegram' || action === 'whatsapp')) {
+                    // Используем Web Share API для Telegram/WhatsApp
+                    const file = new File([blob], fileName, { type: 'image/png' });
+                    
+                    navigator.share({
+                        files: [file],
+                        title: 'График перерывов сотрудников',
+                        text: 'График перерывов сотрудников.'
+                    }).catch((error) => {
+                        console.log('Ошибка Web Share API:', error);
+                        // Если шаринг не удался, предлагаем скачать
+                        downloadFile(blob, fileName);
+                    });
+                    
+                } else {
+                    // Для 'image' или если Web Share API не поддерживается
+                    downloadFile(blob, fileName);
+                }
+            }, 'image/png');
+        }
+
+        /**
+         * Скачивает файл.
+         * @param {Blob} blob - Объект Blob с данными файла.
+         * @param {string} fileName - Имя файла.
+         */
+        function downloadFile(blob, fileName) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+        
+        /**
+         * Экспортирует данные в JSON.
+         */
+        function exportToJSON() {
+            const dataToExport = {
+                shiftStart: shiftStartInput.value,
+                shiftEnd: shiftEndInput.value,
+                employees: employees.map(emp => ({
+                    ...emp,
+                    // Преобразуем Date обратно в ISO-строку для JSON
+                    shiftStart: formatTime(emp.shiftStart), 
+                    shiftEnd: formatTime(emp.shiftEnd),
+                    breaks: emp.breaks.map(br => ({
+                        start: br.start.toISOString(),
+                        end: br.end.toISOString()
+                    }))
+                }))
+            };
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10);
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `employee_breaks_data_${dateStr}.json`);
+            document.body.appendChild(downloadAnchorNode); 
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        /**
+         * Запускает диалог импорта JSON.
+         */
+        function importJSON() {
+            jsonFileInput.click();
+        }
+        
+        /**
+         * Обрабатывает загруженный JSON-файл.
+         */
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    if (data && data.employees) {
+                        // Обновляем глобальный таймлайн
+                        if (data.shiftStart && data.shiftEnd) {
+                            shiftStartInput.value = data.shiftStart;
+                            shiftEndInput.value = data.shiftEnd;
+                        } else {
+                            // Если глобального времени нет, используем дефолтные
+                            shiftStartInput.value = '09:45';
+                            shiftEndInput.value = '22:45';
+                        }
+                        
+                        // Загружаем сотрудников и конвертируем время обратно в Date
+                        employees = data.employees.map(emp => {
+                            const shiftStart = parseTime(emp.shiftStart);
+                            let shiftEnd = parseTime(emp.shiftEnd);
+                            
+                            // Корректировка для ночной смены
+                            if (shiftEnd.getTime() <= shiftStart.getTime()) {
+                                shiftEnd.setDate(shiftEnd.getDate() + 1);
+                            }
+                            
+                            return {
+                                ...emp,
+                                // Конвертируем обратно в Date
+                                shiftStart: shiftStart,
+                                shiftEnd: shiftEnd,
+                                breaks: emp.breaks.map(br => ({
+                                    start: new Date(br.start),
+                                    end: new Date(br.end)
+                                }))
+                            };
+                        });
+                        
+                        // Перерисовываем
+                        updateShiftTimes(true);
+                        alert('Данные успешно импортированы.');
+                    } else {
+                        alert('Некорректный формат JSON-файла.');
+                    }
+                } catch (error) {
+                    alert('Ошибка при чтении файла: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        /**
+         * Копирует расписание в буфер обмена.
+         * @param {string} type - 'brief' (краткое) или 'detailed' (детальное).
+         */
+        function copySchedule(type) {
+            let scheduleText = '';
+            
+            const dateStr = new Date().toLocaleDateString('ru-RU', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            scheduleText += `--- График перерывов на ${dateStr} ---\n\n`;
+            
+            employees.forEach(employee => {
+                const totalDuration = calculateTotalBreakDuration(employee);
+                
+                scheduleText += `* ${employee.name} (${employee.position}) - ${formatTime(employee.shiftStart)} - ${formatTime(employee.shiftEnd)} (Всего перерывов: ${totalDuration} мин)\n`;
+
+                if (type === 'detailed' && employee.breaks.length > 0) {
+                    employee.breaks.sort((a, b) => a.start.getTime() - b.start.getTime()).forEach(br => {
+                        const durationMs = br.end.getTime() - br.start.getTime();
+                        const durationMinutes = Math.round(durationMs / (1000 * 60));
+                        scheduleText += `  - Перерыв: ${formatTime(br.start)} - ${formatTime(br.end)} (${durationMinutes} мин)\n`;
+                    });
+                } else if (type === 'detailed' && employee.breaks.length === 0) {
+                     scheduleText += `  - Нет запланированных перерывов.\n`;
+                }
+            });
+            
+            navigator.clipboard.writeText(scheduleText).then(() => {
+                alert(`Расписание (${type === 'brief' ? 'краткое' : 'детальное'}) скопировано в буфер обмена.`);
+            }).catch(err => {
+                console.error('Ошибка копирования: ', err);
+                alert('Не удалось скопировать текст. Попробуйте вручную (проверьте консоль).');
+            });
+        }
+
+
+        // --- Сохранение/Загрузка в LocalStorage ---
+
+        /**
+         * Сохраняет данные в LocalStorage.
+         */
+        function saveToLocalStorage() {
+            const dataToSave = {
+                shiftStart: shiftStartInput.value,
+                shiftEnd: shiftEndInput.value,
+                employees: employees.map(emp => ({
+                    ...emp,
+                    // Конвертируем Date в ISO-строку для хранения
+                    shiftStart: emp.shiftStart.toISOString(), 
+                    shiftEnd: emp.shiftEnd.toISOString(),
+                    breaks: emp.breaks.map(br => ({
+                        start: br.start.toISOString(),
+                        end: br.end.toISOString()
+                    }))
+                }))
+            };
+            localStorage.setItem('employeeBreakData', JSON.stringify(dataToSave));
+        }
+
+        /**
+         * Загружает данные из LocalStorage.
+         */
+        function loadFromLocalStorage() {
+            const data = JSON.parse(localStorage.getItem('employeeBreakData'));
+            if (data) {
+                // Обновляем глобальный таймлайн
+                if (data.shiftStart && data.shiftEnd) {
+                    shiftStartInput.value = data.shiftStart;
+                    shiftEndInput.value = data.shiftEnd;
+                }
+                
+                // Загружаем сотрудников и конвертируем время обратно в Date
+                employees = data.employees.map(emp => {
+                    const shiftStart = new Date(emp.shiftStart);
+                    const shiftEnd = new Date(emp.shiftEnd);
+                    
+                    return {
+                        ...emp,
+                        shiftStart: shiftStart,
+                        shiftEnd: shiftEnd,
+                        breaks: emp.breaks.map(br => ({
+                            start: new Date(br.start),
+                            end: new Date(br.end)
+                        }))
+                    };
+                });
+                
+                // Инициализируем таймлайн
+                updateShiftTimes(true);
+            } else {
+                 // Если нет данных, просто инициализируем таймлайн с дефолтными значениями
+                updateShiftTimes(true);
+            }
+        }
+
+
+        // --- Инициализация и обработчики событий ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Обработчики кнопок и инпутов
+            addEmployeeBtn.addEventListener('click', addEmployee);
+            addBreakBtn.addEventListener('click', addBreak);
+            saveEmployeeEditBtn.addEventListener('click', saveEmployeeEdit);
+            removeEmployeeBtn.addEventListener('click', removeEmployee);
+            pdfCloseBtn.addEventListener('click', () => {
+                pdfView.style.display = 'none';
+            });
+            
+            // Обработчик для раскрытия меню
+            dataMenuBtn.addEventListener('click', () => {
+                dataDropdown.classList.toggle('show');
+            });
+            document.addEventListener('click', (event) => {
+                if (!dataMenuBtn.contains(event.target) && !dataDropdown.contains(event.target)) {
+                    dataDropdown.classList.remove('show');
+                }
+            });
+            
+            // Обработчик импорта файла
+            jsonFileInput.addEventListener('change', handleFileSelect);
+
+            // Обработчики изменения глобального времени
+            shiftStartInput.addEventListener('change', updateShiftTimes);
+            shiftEndInput.addEventListener('change', updateShiftTimes);
+            
+            // Обработчик очистки данных
+            clearDataBtn.addEventListener('click', () => {
+                if (confirm('Вы уверены, что хотите очистить ВСЕ данные?')) {
+                    localStorage.removeItem('employeeBreakData');
+                    employees = [];
+                    // Сбрасываем к дефолтным значениям и перерисовываем
+                    shiftStartInput.value = '09:45'; 
+                    shiftEndInput.value = '22:45'; 
+                    updateShiftTimes(true); 
+                }
+            });
+            
+            // Обработчик клика для асинхронного выполнения (для экспорта)
+            confirmActionButton.onclick = function() {
+                this.textContent = 'Обработка...';
+                this.disabled = true;
+                this.style.background = '#f39c12';
+                
+                const button = this;
+
+                // Небольшая задержка, чтобы браузер успел обновить состояние кнопки
+                setTimeout(() => {
+                    shareTo(currentAction, button);
+                }, 10);
+            };
+
+            // Инициализация
+            loadFromLocalStorage();
+
+            // Make functions available globally for onclick attributes
+            window.openEditModal = openEditModal;
+            window.closeEditModal = closeEditModal;
+            window.saveEmployeeEdit = saveEmployeeEdit;
+            window.removeEmployee = removeEmployee;
+            window.showBreaks = showBreaks;
+            window.closeBreaksModal = closeBreaksModal;
+            window.removeBreak = removeBreak;
+            window.showPreview = showPreview;
+            window.closePreviewModal = closePreviewModal;
+            window.shareTo = shareTo;
+            window.exportToPDF = exportToPDF;
+            window.exportToImage = exportToImage;
+            window.exportToJSON = exportToJSON;
+            window.importJSON = importJSON;
+            window.copySchedule = copySchedule;
+        });
+    </script>
+</body>
+</html>
